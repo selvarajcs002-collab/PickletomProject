@@ -1,0 +1,8 @@
+{
+  "name": "PickleOn Auth Suite",
+  "description": "A high-fidelity authentication interface inspired by PickleOn, featuring secure login, signup, and social authentication integrations with a premium design aesthetic.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
