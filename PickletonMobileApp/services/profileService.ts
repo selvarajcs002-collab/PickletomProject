@@ -21,8 +21,8 @@ export interface ProfileData {
 }
 
 export const profileService = {
-  getProfile: async (): Promise<ProfileData> => {
-    return await http.get("/Profile");
+  getProfile: async (userId: number): Promise<any> => {
+    return await http.get(`/Profile/${userId}`);
   },
 
   signUp: async (Email_Id: string, Password: string) => {
@@ -30,7 +30,7 @@ export const profileService = {
   },
 
   updateProfile: async (profileData: ProfileData) => {
-    return await http.post("/Profile", profileData);
+    return await http.post("/Profile/UpdateProfile", profileData);
   },
 
   uploadImage: async (imageUri: string, type: "cover" | "avatar") => {
@@ -79,12 +79,12 @@ export const profileService = {
 
   uploadMultiple: async (fileUris: string[]) => {
     const formData = new FormData();
-    
+
     fileUris.forEach((uri, index) => {
       const filename = uri.split("/").pop();
       const match = /\.(\w+)$/.exec(filename || "");
       const ext = (match && match[1] === 'mp4') ? 'video/mp4' : 'image/jpeg';
-      
+
       formData.append("files", {
         uri: uri,
         name: filename || `file_${index}`,
@@ -102,6 +102,6 @@ export const profileService = {
   },
 
   saveProfile: async (payload: any) => {
-    return await http.post("/Profile/save", payload);
+    return await http.post("/Profile/SaveOnboardingProfile", payload);
   }
 };

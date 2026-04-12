@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Mail, Lock, Chrome, ArrowRight, ChevronLeft } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GradientBackground } from '../components/GradientBackground';
@@ -72,9 +73,12 @@ export const SignUpScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const response = await profileService.signUp(email, password);
-      
+
+      // The C# backend returns User_Id, Message in title case.
       if (response && response.User_Id) {
-        // Success
+        // Persist userId for future API requests
+        await AsyncStorage.setItem('userId', response.User_Id.toString());
+        
         updateStepData('userId', response.User_Id);
         Alert.alert('Success', response.Message || 'User created successfully', [
           { text: 'OK', onPress: () => router.push('/onboarding') }
@@ -82,9 +86,9 @@ export const SignUpScreen: React.FC = () => {
       } else {
         Alert.alert('Error', response?.Message || 'Something went wrong. Please try again.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup Error:', error);
-      Alert.alert('Network Error', 'Unable to connect to the server. Please check your network and try again.');
+      Alert.alert('Signup Failed', error?.message || 'Unable to connect to the server. Please check your network and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +100,7 @@ export const SignUpScreen: React.FC = () => {
     <GradientBackground colors={['#7B0000', '#000000']}>
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
-        
+
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={scale(24)} color="white" />
         </TouchableOpacity>
@@ -167,8 +171,8 @@ export const SignUpScreen: React.FC = () => {
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.footer} 
+              <TouchableOpacity
+                style={styles.footer}
                 onPress={() => router.push('/')}
               >
                 <Text style={styles.footerText}>

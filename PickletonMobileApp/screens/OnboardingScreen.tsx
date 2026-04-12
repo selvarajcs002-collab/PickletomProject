@@ -95,10 +95,10 @@ const OnboardingContent: React.FC = () => {
         if (res && res.status === 1) {
           mediaGroupId = res.mediaGroupId;
           mediaFilesList = res.files;
-          setOnboardingData(prev => ({ 
-            ...prev, 
+          setOnboardingData(prev => ({
+            ...prev,
             mediaGroupId: res.mediaGroupId,
-            mediaFiles: res.files 
+            mediaFiles: res.files
           }));
         } else {
           throw new Error(res?.message || 'Media upload failed');
@@ -107,6 +107,10 @@ const OnboardingContent: React.FC = () => {
 
       // 4. Final Profile Save
       console.log('Step 4: Saving Profile...');
+      
+      const tournaments = onboardingData.step5?.tournaments || [];
+      const firstTournament = tournaments.length > 0 ? tournaments[0] : {};
+
       const payload = {
         userId: onboardingData.userId,
         ...onboardingData.step1,
@@ -114,6 +118,10 @@ const OnboardingContent: React.FC = () => {
         ...onboardingData.step3,
         ...onboardingData.step4,
         ...onboardingData.step5,
+        Tournament_name: firstTournament.name || '',
+        Category: firstTournament.category || '',
+        Year: firstTournament.year || '',
+        Result: firstTournament.result || '',
         profileImageUrl: profileUrl,
         coverImageUrl: coverUrl,
         mediaGroupId: mediaGroupId,
@@ -123,7 +131,7 @@ const OnboardingContent: React.FC = () => {
 
       if (response && response.status === 1) {
         // Success -> Final Success Screen or Feed
-        router.push('/profile-setup-loading'); 
+        router.push('/profile-setup-loading');
       } else {
         throw new Error(response?.message || 'Unable to save profile');
       }
@@ -146,7 +154,7 @@ const OnboardingContent: React.FC = () => {
   const renderStep = () => {
     const stepKey = `step${currentStep}` as keyof typeof onboardingData;
     const stepData = onboardingData[stepKey];
-    
+
     switch (currentStep) {
       case 1:
         return <StepOne data={stepData} updateData={(key: string, value: any) => updateStepData('step1', { [key]: value })} />;
@@ -167,7 +175,7 @@ const OnboardingContent: React.FC = () => {
     <GradientBackground colors={[Colors.onboardingRed, '#000000']}>
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
-        
+
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <ChevronLeft size={scale(24)} color="white" />
@@ -206,11 +214,11 @@ const OnboardingContent: React.FC = () => {
                 {currentStep === 4 && "Let’s get to know you and your skills better!"}
                 {currentStep === 5 && "Let’s get to know your training and matches played!"}
               </Text>
-              
+
               {renderStep()}
 
-              <TouchableOpacity 
-                style={[styles.nextButton, isLoading && styles.disabledButton]} 
+              <TouchableOpacity
+                style={[styles.nextButton, isLoading && styles.disabledButton]}
                 onPress={currentStep === 5 ? handleFinish : handleNext}
                 disabled={isLoading}
               >

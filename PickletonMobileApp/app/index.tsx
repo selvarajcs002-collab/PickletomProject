@@ -68,7 +68,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const res = await authService.login(email, password);
-      
+
       if (res.status === 1) {
         setToast({
           visible: true,
@@ -76,8 +76,9 @@ export default function LoginScreen() {
           message: res.message || "Login successful"
         });
 
-        // Persist userId
+        // Persist userId: Clear existing then store new
         if (res.userId) {
+          await AsyncStorage.removeItem('userId');
           await AsyncStorage.setItem('userId', res.userId.toString());
         }
 
