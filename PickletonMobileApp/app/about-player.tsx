@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import * as Colors from "../constants/Colors";
 import BottomNav from "../components/BottomNav";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { profileService } from "../services/profileService";
+import { useRouter, useFocusEffect } from "expo-router";
 
 const { width } = Dimensions.get("window");
 const scale = (size: number) => (width / 375) * size;
@@ -46,30 +47,39 @@ const parseSkills = (skills?: string | null): string[] => {
 const SKILL_COLORS = ["#000", "#B20000"];
 
 function ProfileInfo() {
+  const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const storedId = await AsyncStorage.getItem("userId");
-        if (!storedId) {
-          setError("User not logged in. Please log in again.");
-          return;
+  // Re-fetch every time this screen gains focus (e.g. returning from edit-profile)
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const fetchProfile = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const storedId = await AsyncStorage.getItem("userId");
+          if (!storedId) {
+            setError("User not logged in. Please log in again.");
+            return;
+          }
+          const userId = parseInt(storedId, 10);
+          const data = await profileService.getProfile(userId);
+          if (active) setProfile(data);
+        } catch (err: any) {
+          console.error("Profile fetch error:", err);
+          if (active) setError(err?.message || "Failed to load profile.");
+        } finally {
+          if (active) setLoading(false);
         }
-        const userId = parseInt(storedId, 10);
-        const data = await profileService.getProfile(userId);
-        setProfile(data);
-      } catch (err: any) {
-        console.error("Profile fetch error:", err);
-        setError(err?.message || "Failed to load profile.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
-  }, []);
+      };
+      fetchProfile();
+      // Cleanup: prevent state update if screen is unfocused before fetch completes
+      return () => { active = false; };
+    }, [])
+  );
 
   if (loading) {
     return (
@@ -143,7 +153,7 @@ function ProfileInfo() {
       {/* TOP HEADER */}
       <View style={styles.topHeader}>
         <Text style={styles.headerTitle}>PickleOn</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/edit-profile")}>
           <Pencil color="white" size={20} />
         </TouchableOpacity>
       </View>
