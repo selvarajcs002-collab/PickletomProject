@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import {
   Pencil,
@@ -16,24 +17,135 @@ import {
   MapPin,
   Users,
   UserPlus,
-  ChevronRight,
   LayoutGrid,
   Zap,
   Target,
   Award,
   GraduationCap,
-  Users as LucideUsers,
-  BarChart3
+  BarChart3,
 } from "lucide-react-native";
 import * as Colors from "../constants/Colors";
 import BottomNav from "../components/BottomNav";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { profileService } from "../services/profileService";
+import { useRouter, useFocusEffect } from "expo-router";
 
 const { width } = Dimensions.get("window");
-
-// 🔥 Responsive scale
 const scale = (size: number) => (width / 375) * size;
 
+// Fallback placeholder images
+const FALLBACK_COVER = "https://images.unsplash.com/photo-1594470117722-de43583d3f10";
+const FALLBACK_AVATAR = "https://randomuser.me/api/portraits/men/32.jpg";
+
+// Helper: split skills string "Fast Volleys, Deep Serves" → array
+const parseSkills = (skills?: string | null): string[] => {
+  if (!skills) return [];
+  return skills.split(",").map((s) => s.trim()).filter(Boolean);
+};
+
+// Alternate skill pill colors
+const SKILL_COLORS = ["#000", "#B20000"];
+
 function ProfileInfo() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-fetch every time this screen gains focus (e.g. returning from edit-profile)
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const fetchProfile = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const storedId = await AsyncStorage.getItem("userId");
+          if (!storedId) {
+            setError("User not logged in. Please log in again.");
+            return;
+          }
+          const userId = parseInt(storedId, 10);
+          const data = await profileService.getProfile(userId);
+          if (active) setProfile(data);
+        } catch (err: any) {
+          console.error("Profile fetch error:", err);
+          if (active) setError(err?.message || "Failed to load profile.");
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+      fetchProfile();
+      // Cleanup: prevent state update if screen is unfocused before fetch completes
+      return () => { active = false; };
+    }, [])
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { justifyContent: "center", alignItems: "center" }]}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator size="large" color="#D92626" />
+        <Text style={{ color: "white", marginTop: 12, fontSize: scale(14) }}>Loading profile...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { justifyContent: "center", alignItems: "center" }]}>
+        <StatusBar barStyle="light-content" />
+        <Text style={{ color: "#FF4A2A", fontSize: scale(14), textAlign: "center", paddingHorizontal: 24 }}>
+          {error || "Profile not found."}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Map API response fields to display values
+  const fullName = profile.userName || profile.FullName || "—";
+  const gender = profile.Gender || "—";
+  const yearBorn = profile.Age || profile.YearBorn || "—";
+  const playingLevel = profile.Playing_level || profile.PlayingLevel || "—";
+  const location = profile.Location || "—";
+  const playingSince = profile.Playing_since || profile.PlayingSinceMonth || "—";
+  const playingSinceYear = profile.PlayingSinceYear || "";
+  const powerHand = profile.Power_hand || profile.PowerHand || "—";
+  const backHand = profile.Back_hand || profile.BackHand || "—";
+  const about = profile.About || "No bio available.";
+  const skills = parseSkills(profile.Skills);
+  const equipment = profile.Equipment || "—";
+  const coachName = profile.Coach_name || profile.CoachName || "—";
+  const trainingLocation = profile.Training_location || profile.TrainingLocation || "—";
+  const clubName = profile.Club || profile.ClubName || "—";
+  const tournamentName = profile.Tournament_name || profile.TournamentName || null;
+  const tournamentCategory = profile.Category || "—";
+  const tournamentYear = profile.Year ? profile.Year.toString() : "—";
+  const tournamentResult = profile.Result || "—";
+  const duprLink = profile.DUPR_profile_link || profile.DuprLink || null;
+
+  // ── Coach fields (future-proof: will auto-populate when API returns them) ──
+  const coachingSince = profile.CoachingSince || profile.Coaching_since || null;
+  const coachingOpenTo = profile.OpenTo || profile.Open_to || null;
+  const coachingTrainingLevel = profile.CoachingTrainingLevel || profile.Coaching_training_level || null;
+  const coachingLocation = profile.CoachingLocation || profile.Coaching_location || trainingLocation !== "—" ? trainingLocation : null;
+  const coachingSpecialisation = parseSkills(profile.CoachingSpecialisation || profile.Coaching_specialisation || profile.Skills || "");
+  const certification = profile.Certification || null;
+
+  // A coach record is considered present if at least one coach-specific field exists
+  const hasCoachRecord = !!(coachingSince || coachingOpenTo || coachingTrainingLevel || coachingLocation || certification || coachingSpecialisation.length > 0);
+
+  const profileImageUrl = profile.ProfileImageUrl || null;
+  const initial = fullName && fullName !== "—" ? fullName.trim()[0].toUpperCase() : "?";
+  const coverImageUrl = profile.BackgroundImageUrl || profile.CoverImageUrl || FALLBACK_COVER;
+
+  const playingSinceDisplay =
+    playingSince !== "—"
+      ? `${playingSince}${playingSinceYear ? " " + playingSinceYear : ""}`
+      : "—";
+
+  const subText = `${playingLevel} · ${gender} · ${yearBorn}`;
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: Colors.background || "transparent" }]}>
       <StatusBar barStyle="light-content" />
@@ -41,35 +153,29 @@ function ProfileInfo() {
       {/* TOP HEADER */}
       <View style={styles.topHeader}>
         <Text style={styles.headerTitle}>PickleOn</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/edit-profile")}>
           <Pencil color="white" size={20} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* MAIN CONTENT CARD */}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* MAIN PROFILE CARD */}
         <View style={styles.mainCard}>
           {/* COVER IMAGE */}
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1594470117722-de43583d3f10", // Pickleball action shot
-            }}
-            style={styles.coverImage}
-          />
+          <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
 
           <View style={styles.cardContent}>
             {/* PROFILE IMAGE OVERLAP */}
             <View style={styles.profileImageWrapper}>
               <View style={styles.profilePicContainer}>
-                <Image
-                  source={{
-                    uri: "https://randomuser.me/api/portraits/men/32.jpg",
-                  }}
-                  style={styles.profilePic}
-                />
+                {profileImageUrl ? (
+                  <Image source={{ uri: profileImageUrl }} style={styles.profilePic} />
+                ) : (
+                  <View style={styles.initialsAvatar}>
+                    <Text style={styles.initialsText}>{initial}</Text>
+                  </View>
+                )}
                 <TouchableOpacity style={styles.editProfileTool}>
                   <Pencil color="white" size={10} />
                 </TouchableOpacity>
@@ -77,13 +183,13 @@ function ProfileInfo() {
 
               <View style={styles.nameSection}>
                 <View style={styles.rowAlign}>
-                  <Text style={styles.name}>Ben Johns</Text>
-                  <LinkIcon color="#888" size={14} style={{ marginLeft: 6 }} />
+                  <Text style={styles.name}>{fullName}</Text>
+                  {duprLink && <LinkIcon color="#888" size={14} style={{ marginLeft: 6 }} />}
                 </View>
-                <Text style={styles.subText}>Professional . M . 24</Text>
+                <Text style={styles.subText}>{subText}</Text>
                 <View style={styles.locationRow}>
-                  <Text style={{ fontSize: 14 }}>🇺🇸 </Text>
-                  <Text style={styles.locationText}>Boca Raton, Florida, USA</Text>
+                  <Text style={{ fontSize: 14 }}>📍 </Text>
+                  <Text style={styles.locationText}>{location}</Text>
                 </View>
               </View>
             </View>
@@ -95,7 +201,7 @@ function ProfileInfo() {
                   <Text style={{ fontSize: 18 }}>🏓</Text>
                 </View>
                 <View>
-                  <Text style={styles.statValueText}>April 2016</Text>
+                  <Text style={styles.statValueText}>{playingSinceDisplay}</Text>
                   <Text style={styles.statLabelText}>Playing Since</Text>
                 </View>
               </View>
@@ -105,7 +211,7 @@ function ProfileInfo() {
                   <Text style={{ fontSize: 18 }}>💪</Text>
                 </View>
                 <View>
-                  <Text style={styles.statValueText}>Right</Text>
+                  <Text style={styles.statValueText}>{powerHand}</Text>
                   <Text style={styles.statLabelText}>Power Hand</Text>
                 </View>
               </View>
@@ -115,7 +221,7 @@ function ProfileInfo() {
                   <Text style={{ fontSize: 18 }}>🙌</Text>
                 </View>
                 <View>
-                  <Text style={styles.statValueText}>Double</Text>
+                  <Text style={styles.statValueText}>{backHand}</Text>
                   <Text style={styles.statLabelText}>Backhand</Text>
                 </View>
               </View>
@@ -140,208 +246,225 @@ function ProfileInfo() {
             </View>
 
             {/* CARD FOOTER */}
-            <View style={styles.cardFooter}>
-              <Text style={styles.footerBaseText}>
-                Often seen playing at <Text style={styles.footerBoldText}>FloridaClub</Text>
-              </Text>
-              <MapPin color="#D92626" size={14} style={{ marginLeft: 4 }} />
-            </View>
+            {clubName !== "—" && (
+              <View style={styles.cardFooter}>
+                <Text style={styles.footerBaseText}>
+                  Often seen playing at <Text style={styles.footerBoldText}>{clubName}</Text>
+                </Text>
+                <MapPin color="#D92626" size={14} style={{ marginLeft: 4 }} />
+              </View>
+            )}
           </View>
         </View>
 
-        {/* ABOUT SECTION - Career Bio Card */}
+        {/* ABOUT SECTION */}
         <View style={styles.mainCard}>
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>ABOUT</Text>
-            <Text style={styles.aboutText}>
-              I began my professional pickleball journey in 2016, and since then, the sport has become a defining part of my life. Over the years, I've been fortunate to compete across all divisions in singles, men's doubles, and mixed doubles to hold the world number-one ranking in each. I've earned more than 100 Professional Pickleball Association (PPA) titles and multiple “Triple Crowns,” winning gold in singles, doubles, and mixed doubles at major tournaments such as the Tournament of Champions and the U.S. Open.
-            </Text>
+            {about && about !== "No bio available." ? (
+              <Text style={styles.aboutText}>{about}</Text>
+            ) : (
+              <TouchableOpacity style={styles.addAboutCard} activeOpacity={0.75}>
+                <Text style={styles.addAboutPlus}>+</Text>
+                <Text style={styles.addAboutTitle}>Add About You</Text>
+                <Text style={styles.addAboutSubtitle}>(Enhance Your Profile)</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* PLAYING STYLE SECTION - Visual Gallery Card */}
+        {/* PLAYING STYLE SECTION */}
         <View style={styles.mainCard}>
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>PLAYING STYLE</Text>
             <View style={styles.bannerContainer}>
               <Image
-                source={{
-                  uri: "https://images.unsplash.com/photo-1517649763962-0c623066013b", // Alternative action shot
-                }}
+                source={{ uri: FALLBACK_COVER }}
                 style={styles.bannerImage}
               />
-              {/* Image position indicator badge */}
               <View style={styles.imageBadge}>
-                <Text style={styles.badgeText}>1/4</Text>
+                <Text style={styles.badgeText}>1/1</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* PLAYER RECORD SECTION - Detailed Achievement Card */}
+        {/* PLAYER RECORD SECTION */}
         <View style={styles.mainCard}>
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>PLAYER RECORD</Text>
 
-            {/* Notable Tournaments List */}
+            {/* Notable Tournament */}
             <View style={styles.recordSection}>
               <View style={styles.sectionHeaderRow}>
                 <LayoutGrid color="#888" size={16} />
                 <Text style={styles.sectionHeaderText}>Notable Tournaments</Text>
               </View>
-
               <View style={styles.tournamentList}>
-                {[
-                  { title: "Indian Pickleball Association, Chennai Open", sub: "Singles . 2025 . Winner . Advance" },
-                  { title: "World Pickleball Rating, Malaysia Open", sub: "Mixed Doubles . 2025 . Runner . Advance" },
-                  { title: "PPA, Vietnam Open", sub: "Mixed Doubles . 2024 . Semi-finalist . Professional" },
-                  { title: "Winter Edition, Miami Open", sub: "Doubles . 2026 . Semi-finalist . Open" },
-                  { title: "Willies Cup", sub: "Singles . 2026 . Qualifiers . Open" },
-                ].map((item, idx) => (
-                  <View key={idx} style={styles.tournamentItem}>
-                    <Text style={styles.tournamentTitle}>{item.title}</Text>
-                    <Text style={styles.tournamentSub}>{item.sub}</Text>
+                {tournamentName ? (
+                  <View style={styles.tournamentItem}>
+                    <Text style={styles.tournamentTitle}>{tournamentName}</Text>
+                    <Text style={styles.tournamentSub}>
+                      {tournamentCategory} · {tournamentYear} · {tournamentResult} · {playingLevel}
+                    </Text>
                   </View>
-                ))}
+                ) : (
+                  <Text style={styles.emptyText}>No tournament data yet.</Text>
+                )}
               </View>
             </View>
 
-            {/* Skills Sub-section */}
+            {/* Skills */}
             <View style={styles.recordSection}>
               <View style={styles.sectionHeaderRow}>
                 <Zap color="#FFD700" size={16} fill="#FFD700" />
                 <Text style={styles.sectionHeaderText}>Skills</Text>
               </View>
-              <View style={styles.skillsWrapper}>
-                {[
-                  { name: "Fast Volleys", bg: "#000" },
-                  { name: "Deep Serves", bg: "#B20000" },
-                  { name: "Third Shot Drop", bg: "#000" },
-                  { name: "Overhead Smash", bg: "#B20000" },
-                  { name: "Speed Drills", bg: "#B20000" },
-                  { name: "Backhand Slice", bg: "#000" },
-                ].map((skill, idx) => (
-                  <View key={idx} style={[styles.skillPill, { backgroundColor: skill.bg }]}>
-                    <Text style={styles.skillPillText}>{skill.name}</Text>
-                  </View>
-                ))}
-              </View>
+              {skills.length > 0 ? (
+                <View style={styles.skillsWrapper}>
+                  {skills.map((skill, idx) => (
+                    <View
+                      key={idx}
+                      style={[styles.skillPill, { backgroundColor: SKILL_COLORS[idx % SKILL_COLORS.length] }]}
+                    >
+                      <Text style={styles.skillPillText}>{skill}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No skills listed.</Text>
+              )}
             </View>
 
-            {/* Training Sub-section */}
+            {/* Training */}
             <View style={styles.recordSection}>
               <View style={styles.sectionHeaderRow}>
                 <Target color="#D92626" size={16} />
                 <Text style={styles.sectionHeaderText}>Training</Text>
               </View>
               <View style={styles.trainingBox}>
-                <Text style={styles.coachName}>Vishnu Raja</Text>
+                <Text style={styles.coachName}>{coachName}</Text>
                 <View style={styles.locationRowSmall}>
                   <MapPin color="#D92626" size={14} />
-                  <Text style={styles.locationTextSmall}>Pickleball Clubhouse, Coimbatore, TN, India</Text>
+                  <Text style={styles.locationTextSmall}>{trainingLocation}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Equipment Sub-section */}
+            {/* Equipment */}
             <View style={styles.recordSection}>
               <View style={styles.sectionHeaderRow}>
                 <Award color="#888" size={16} />
                 <Text style={styles.sectionHeaderText}>Equipment</Text>
               </View>
               <View style={styles.equipmentBox}>
-                <Text style={styles.equipmentText}>Joola Persues, 14mm</Text>
+                <Text style={styles.equipmentText}>{equipment}</Text>
               </View>
             </View>
-
           </View>
         </View>
 
-        {/* COACH RECORD SECTION - Professional Coaching Details */}
+        {/* COACH RECORD SECTION */}
         <View style={styles.mainCard}>
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>COACH RECORD</Text>
 
-            {/* Tenure and Type Row */}
-            <View style={styles.selectionRow}>
-              <View style={styles.selectionItem}>
-                <View style={styles.sectionHeaderRow}>
-                  <GraduationCap color="#2E8B57" size={16} />
-                  <Text style={styles.sectionHeaderTextSmall}>Coaching Since</Text>
-                </View>
-                <View style={styles.selectionTextRow}>
-                  <Text style={styles.selectionText}>2025</Text>
-                </View>
-              </View>
-
-              <View style={styles.selectionItem}>
-                <View style={styles.sectionHeaderRow}>
-                  <Users color="#FF8C00" size={16} />
-                  <Text style={styles.sectionHeaderTextSmall}>Open to</Text>
-                </View>
-                <View style={styles.selectionTextRow}>
-                  <Text style={styles.selectionText}>Individual & Group</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Training Level Sub-section */}
-            <View style={styles.recordSection}>
-              <View style={styles.sectionHeaderRow}>
-                <BarChart3 color="#4169E1" size={16} />
-                <Text style={styles.sectionHeaderText}>Training Level</Text>
-              </View>
-              <View style={styles.selectionTextRow}>
-                <Text style={styles.selectionText}>Beginner, Intermediate, Advance, Professional</Text>
-              </View>
-            </View>
-
-            {/* Coaching Location Sub-section */}
-            <View style={styles.recordSection}>
-              <View style={styles.sectionHeaderRow}>
-                <MapPin color="#D92626" size={16} />
-                <Text style={styles.sectionHeaderText}>Often Seen Coaching At</Text>
-              </View>
-              <View style={styles.selectionTextRow}>
-                <Text style={styles.selectionText}>RallyHub, Tirupur, TN, India</Text>
-              </View>
-            </View>
-
-            {/* Coaching Specialisation Sub-section */}
-            <View style={styles.recordSection}>
-              <View style={styles.sectionHeaderRow}>
-                <Zap color="#FFD700" size={16} fill="#FFD700" />
-                <Text style={styles.sectionHeaderText}>Coaching Specialisation</Text>
-              </View>
-              <View style={styles.skillsWrapper}>
-                {[
-                  { name: "Fast Volleys", bg: "#B20000" },
-                  { name: " ", bg: "#300" }, // Visual gap tag from mockup
-                  { name: "Third Shot Drop", bg: "#000" },
-                  { name: "Overhead Smash", bg: "#B20000" },
-                  { name: "Speed Drills", bg: "#B20000" },
-                  { name: "Backhand Slice", bg: "#000" },
-                ].map((skill, idx) => (
-                  <View key={idx} style={[styles.skillPill, { backgroundColor: skill.bg }]}>
-                    <Text style={styles.skillPillText}>{skill.name}</Text>
+            {hasCoachRecord ? (
+              <>
+                {/* Coaching Since + Open To row */}
+                {(coachingSince || coachingOpenTo) && (
+                  <View style={styles.selectionRow}>
+                    {coachingSince && (
+                      <View style={styles.selectionItem}>
+                        <View style={styles.sectionHeaderRow}>
+                          <GraduationCap color="#2E8B57" size={16} />
+                          <Text style={styles.sectionHeaderTextSmall}>Coaching Since</Text>
+                        </View>
+                        <View style={styles.selectionTextRow}>
+                          <Text style={styles.selectionText}>{coachingSince}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {coachingOpenTo && (
+                      <View style={styles.selectionItem}>
+                        <View style={styles.sectionHeaderRow}>
+                          <Users color="#FF8C00" size={16} />
+                          <Text style={styles.sectionHeaderTextSmall}>Open to</Text>
+                        </View>
+                        <View style={styles.selectionTextRow}>
+                          <Text style={styles.selectionText}>{coachingOpenTo}</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                ))}
-              </View>
-            </View>
+                )}
 
-            {/* Certification Sub-section */}
-            <View style={styles.recordSection}>
-              <View style={styles.sectionHeaderRow}>
-                <Award color="#FFD700" size={16} />
-                <Text style={styles.sectionHeaderText}>Certification</Text>
-              </View>
-              <View style={styles.selectionTextRow}>
-                <Text style={styles.selectionText}>RallyHub, Tirupur, TN, India</Text>
-              </View>
-            </View>
+                {/* Training Level */}
+                {coachingTrainingLevel && (
+                  <View style={styles.recordSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <BarChart3 color="#4169E1" size={16} />
+                      <Text style={styles.sectionHeaderText}>Training Level</Text>
+                    </View>
+                    <View style={styles.selectionTextRow}>
+                      <Text style={styles.selectionText}>{coachingTrainingLevel}</Text>
+                    </View>
+                  </View>
+                )}
 
+                {/* Often Seen Coaching At */}
+                {coachingLocation && (
+                  <View style={styles.recordSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <MapPin color="#D92626" size={16} />
+                      <Text style={styles.sectionHeaderText}>Often Seen Coaching At</Text>
+                    </View>
+                    <View style={styles.selectionTextRow}>
+                      <Text style={styles.selectionText}>{coachingLocation}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Coaching Specialisation */}
+                {coachingSpecialisation.length > 0 && (
+                  <View style={styles.recordSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Zap color="#FFD700" size={16} fill="#FFD700" />
+                      <Text style={styles.sectionHeaderText}>Coaching Specialisation</Text>
+                    </View>
+                    <View style={styles.skillsWrapper}>
+                      {coachingSpecialisation.map((spec, idx) => (
+                        <View key={idx} style={[styles.skillPill, { backgroundColor: SKILL_COLORS[idx % SKILL_COLORS.length] }]}>
+                          <Text style={styles.skillPillText}>{spec}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Certification */}
+                {certification && (
+                  <View style={styles.recordSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Award color="#FFD700" size={16} />
+                      <Text style={styles.sectionHeaderText}>Certification</Text>
+                    </View>
+                    <View style={styles.selectionTextRow}>
+                      <Text style={styles.selectionText}>{certification}</Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              // Empty state — matches uploaded mockup
+              <TouchableOpacity style={styles.addCoachCard} activeOpacity={0.75}>
+                <Text style={styles.addCoachPlus}>+</Text>
+                <Text style={styles.addCoachTitle}>Add Coach Record</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
+
       </ScrollView>
 
       {/* NAVIGATION BAR */}
@@ -373,7 +496,7 @@ const styles = StyleSheet.create({
   mainCard: {
     backgroundColor: "white",
     marginHorizontal: scale(12),
-    marginTop: scale(15), // Increased gap between cards
+    marginTop: scale(15),
     borderRadius: scale(24),
     overflow: "hidden",
     shadowColor: "#000",
@@ -507,7 +630,7 @@ const styles = StyleSheet.create({
   duprLogo: {
     fontSize: scale(42),
     fontWeight: "900",
-    color: "#0048AB", // DUPR Blue
+    color: "#0048AB",
     marginTop: scale(5),
   },
   cardFooter: {
@@ -642,10 +765,61 @@ const styles = StyleSheet.create({
     fontSize: scale(12),
     color: "#333",
   },
+  emptyText: {
+    fontSize: scale(12),
+    color: "#9CA3AF",
+    fontStyle: "italic",
+  },
+  // ── Initials Avatar (Teams-style) ─────────────────────────────────────────
+  initialsAvatar: {
+    width: "100%",
+    height: "100%",
+    borderRadius: scale(14),
+    backgroundColor: "#B20000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  initialsText: {
+    color: "white",
+    fontSize: scale(36),
+    fontWeight: "800",
+    lineHeight: scale(44),
+  },
+  // ── Add About You empty-state ──────────────────────────────────────────────
+  addAboutCard: {
+    borderWidth: 1.5,
+    borderColor: "#6B2222",
+    borderStyle: "dashed",
+    borderRadius: scale(14),
+    backgroundColor: "#2A1010",
+    height: scale(120),
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: scale(4),
+  },
+  addAboutPlus: {
+    color: "white",
+    fontSize: scale(26),
+    fontWeight: "300",
+    lineHeight: scale(32),
+    marginBottom: scale(4),
+  },
+  addAboutTitle: {
+    color: "white",
+    fontSize: scale(14),
+    fontWeight: "700",
+  },
+  addAboutSubtitle: {
+    color: "#9CA3AF",
+    fontSize: scale(11),
+    marginTop: scale(2),
+  },
+  // ── Coach Record layout styles ─────────────────────────────────────────────
   selectionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: scale(10),
+    marginTop: scale(12),
   },
   selectionItem: {
     flex: 1,
@@ -666,6 +840,30 @@ const styles = StyleSheet.create({
     fontSize: scale(11),
     color: "#333",
     fontWeight: "500",
+  },
+  // ── Add Coach Record empty-state ───────────────────────────────────────────
+  addCoachCard: {
+    borderRadius: scale(14),
+    overflow: "hidden",
+    height: scale(110),
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#7A4A4A",
+    // Simulates the gradient look from mockup via layered background
+    marginTop: scale(4),
+  },
+  addCoachPlus: {
+    color: "white",
+    fontSize: scale(26),
+    fontWeight: "300",
+    lineHeight: scale(32),
+    marginBottom: scale(6),
+  },
+  addCoachTitle: {
+    color: "white",
+    fontSize: scale(14),
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
 });
 
