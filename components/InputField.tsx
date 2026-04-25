@@ -1,53 +1,95 @@
-
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { View, Text, TextInput, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { Colors } from '../constants/Colors';
+
+const { width } = Dimensions.get('window');
+const scale = (size: number) => (width / 375) * size;
 
 interface InputFieldProps {
-  label: string;
-  type: 'text' | 'email' | 'password';
-  placeholder: string;
+  label?: string;
   value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'numeric' | 'email-address';
+  secureTextEntry?: boolean;
+  icon?: React.ReactNode;
 }
 
-const InputField: React.FC<InputFieldProps> = ({
+export const InputField: React.FC<InputFieldProps> = ({
   label,
-  type,
-  placeholder,
   value,
-  onChange,
-  required = false,
+  onChangeText,
+  placeholder,
+  keyboardType = 'default',
+  secureTextEntry = false,
+  icon,
 }) => {
-  const [showPassword, setShowPassword] = useState(false);
-  const isPassword = type === 'password';
+  const [isPasswordVisible, setIsPasswordVisible] = useState(!secureTextEntry);
 
   return (
-    <div className="w-full flex flex-col gap-2">
-      <label className="text-sm font-medium text-gray-500 ml-1">
-        {label}
-      </label>
-      <div className="relative group">
-        <input
-          type={isPassword ? (showPassword ? 'text' : 'password') : type}
-          placeholder={placeholder}
+    <View style={styles.container}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <View style={styles.inputWrapper}>
+        {icon && <View style={styles.iconContainer}>{icon}</View>}
+        <TextInput
+          style={[styles.input, icon ? { paddingLeft: scale(8) } : {}]}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={required}
-          className="w-full h-[50px] px-3 bg-gray-50 text-gray-900 rounded-[15px] border-2 border-transparent focus:border-[#812926]/20 focus:bg-white transition-all duration-300 outline-none text-base placeholder-gray-400 font-medium shadow-sm group-hover:bg-gray-100 focus:group-hover:bg-white"
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={Colors.onboardingTextMuted}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry && !isPasswordVisible}
         />
-        {isPassword && (
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#812926] focus:outline-none transition-colors p-1"
+        {secureTextEntry && (
+          <TouchableOpacity 
+            onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+            style={styles.eyeIcon}
           >
-            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
+            {isPasswordVisible ? (
+              <EyeOff size={scale(20)} color={Colors.onboardingTextMuted} />
+            ) : (
+              <Eye size={scale(20)} color={Colors.onboardingTextMuted} />
+            )}
+          </TouchableOpacity>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 };
 
-export default InputField;
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: scale(16),
+    width: '100%',
+  },
+  label: {
+    fontSize: scale(12),
+    fontWeight: '700',
+    color: Colors.onboardingTextMuted,
+    marginBottom: scale(6),
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  inputWrapper: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: scale(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: scale(16),
+  },
+  iconContainer: {
+    marginRight: scale(4),
+  },
+  input: {
+    flex: 1,
+    paddingVertical: scale(12),
+    fontSize: scale(14),
+    color: Colors.onboardingText,
+  },
+  eyeIcon: {
+    padding: scale(4),
+  },
+});
