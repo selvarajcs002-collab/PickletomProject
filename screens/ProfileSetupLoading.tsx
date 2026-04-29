@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Animated, Easing, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { UserCircle2 } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientBackground } from '../components/GradientBackground';
@@ -73,25 +72,28 @@ export default function ProfileSetupLoading() {
           <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
             {/* PULSE RINGS */}
             <View style={styles.avatarWrapper}>
-              <Animated.View 
+              <Animated.View
                 style={[
-                  styles.pulseRing, 
-                  { 
+                  styles.pulseRing,
+                  {
                     transform: [{ scale: pulseAnim }],
                     opacity: pulseAnim.interpolate({
                       inputRange: [1, 1.3],
-                      outputRange: [0.6, 0.2]
+                      outputRange: [0.5, 0.05]
                     })
                   }
-                ]} 
+                ]}
               />
-              <View style={styles.avatarCircle}>
-                <UserCircle2 size={scale(80)} color="#FFFFFF" strokeWidth={1} />
-              </View>
+              {/* App Logo */}
+              <Image
+                source={require('../assets/pickleon-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
 
             <Text style={styles.title}>Setting up your Profile!</Text>
-            
+
             <View style={styles.loadingContainer}>
               <View style={styles.dotIndicator} />
               <Text style={styles.loadingText}>Loading{dots}</Text>
@@ -123,29 +125,24 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   avatarWrapper: {
-    width: width * 0.35,
-    height: width * 0.35,
+    width: scale(130),
+    height: scale(130),
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: scale(32),
   },
   pulseRing: {
     position: 'absolute',
-    width: width * 0.3,
-    height: width * 0.3,
-    borderRadius: (width * 0.3) / 2,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+    width: scale(150),
+    height: scale(150),
+    borderRadius: scale(34),      // matches the logo's rounded-square shape
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
-  avatarCircle: {
-    width: width * 0.2,
-    height: width * 0.2,
-    borderRadius: (width * 0.2) / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+  logoImage: {
+    width: scale(120),
+    height: scale(120),
+    borderRadius: scale(28),      // logo already has rounded corners
     zIndex: 10,
   },
   title: {

@@ -33,8 +33,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 const { width } = Dimensions.get("window");
 const scale = (size: number) => (width / 375) * size;
 
-// Fallback placeholder images
-const FALLBACK_COVER = "https://images.unsplash.com/photo-1594470117722-de43583d3f10";
+// Default cover image bundled from assets
+const DEFAULT_COVER = require("../assets/Default-Cover-Image.jpg");
 const FALLBACK_AVATAR = "https://randomuser.me/api/portraits/men/32.jpg";
 
 // Helper: split skills string "Fast Volleys, Deep Serves" → array
@@ -118,11 +118,25 @@ function ProfileInfo() {
   const coachName = profile.Coach_name || profile.CoachName || "—";
   const trainingLocation = profile.Training_location || profile.TrainingLocation || "—";
   const clubName = profile.Club || profile.ClubName || "—";
-  const tournamentName = profile.Tournament_name || profile.TournamentName || null;
-  const tournamentCategory = profile.Category || "—";
-  const tournamentYear = profile.Year ? profile.Year.toString() : "—";
-  const tournamentResult = profile.Result || "—";
   const duprLink = profile.DUPR_profile_link || profile.DuprLink || null;
+  const playingStyleImageUrl = profile.PlayingStyleImageUrl || profile.Playing_style_image_url || null;
+
+  // Parse multiple tournaments: JSON array takes priority, fall back to single old fields
+  let tournaments: { name: string; category: string; year: string; result: string }[] = [];
+  if (profile.Tournaments) {
+    try {
+      const parsed = JSON.parse(profile.Tournaments);
+      if (Array.isArray(parsed)) tournaments = parsed;
+    } catch { /* ignore */ }
+  }
+  if (tournaments.length === 0 && (profile.Tournament_name || profile.TournamentName)) {
+    tournaments = [{
+      name: profile.Tournament_name || profile.TournamentName || "",
+      category: profile.Category || "—",
+      year: profile.Year ? profile.Year.toString() : "—",
+      result: profile.Result || "—",
+    }];
+  }
 
   // ── Coach fields (future-proof: will auto-populate when API returns them) ──
   const coachingSince = profile.CoachingSince || profile.Coaching_since || null;
@@ -137,7 +151,7 @@ function ProfileInfo() {
 
   const profileImageUrl = profile.ProfileImageUrl || null;
   const initial = fullName && fullName !== "—" ? fullName.trim()[0].toUpperCase() : "?";
-  const coverImageUrl = profile.BackgroundImageUrl || profile.CoverImageUrl || FALLBACK_COVER;
+  const coverImageUrl = profile.BackgroundImageUrl || profile.CoverImageUrl || null;
 
   const playingSinceDisplay =
     playingSince !== "—"
@@ -162,8 +176,11 @@ function ProfileInfo() {
 
         {/* MAIN PROFILE CARD */}
         <View style={styles.mainCard}>
-          {/* COVER IMAGE */}
-          <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
+          {/* COVER IMAGE: user's uploaded image or bundled default */}
+          <Image
+            source={coverImageUrl ? { uri: coverImageUrl } : DEFAULT_COVER}
+            style={styles.coverImage}
+          />
 
           <View style={styles.cardContent}>
             {/* PROFILE IMAGE OVERLAP */}
@@ -277,15 +294,23 @@ function ProfileInfo() {
         <View style={styles.mainCard}>
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>PLAYING STYLE</Text>
-            <View style={styles.bannerContainer}>
-              <Image
-                source={{ uri: FALLBACK_COVER }}
-                style={styles.bannerImage}
-              />
-              <View style={styles.imageBadge}>
-                <Text style={styles.badgeText}>1/1</Text>
+            {playingStyleImageUrl ? (
+              <View style={styles.bannerContainer}>
+                <Image
+                  source={{ uri: playingStyleImageUrl }}
+                  style={styles.bannerImage}
+                />
+                <View style={styles.imageBadge}>
+                  <Text style={styles.badgeText}>1/1</Text>
+                </View>
               </View>
-            </View>
+            ) : (
+              <TouchableOpacity style={styles.addPlayingStyleCard} activeOpacity={0.75}>
+                <Text style={styles.addPlayingStylePlus}>+</Text>
+                <Text style={styles.addPlayingStyleTitle}>Add Playing Style</Text>
+                <Text style={styles.addPlayingStyleSubtitle}>(Showcase Your Game)</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -294,25 +319,27 @@ function ProfileInfo() {
           <View style={styles.cardContent}>
             <Text style={styles.sectionTitleCenter}>PLAYER RECORD</Text>
 
-            {/* Notable Tournament */}
-            <View style={styles.recordSection}>
-              <View style={styles.sectionHeaderRow}>
-                <LayoutGrid color="#888" size={16} />
-                <Text style={styles.sectionHeaderText}>Notable Tournaments</Text>
+            {/* Notable Tournaments — only shown when data exists */}
+            {tournaments.length > 0 && (
+              <View style={styles.recordSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <LayoutGrid color="#888" size={16} />
+                  <Text style={styles.sectionHeaderText}>Notable Tournaments</Text>
+                </View>
+                <View style={styles.tournamentList}>
+                  {tournaments.map((t, idx) => (
+                    <View key={idx} style={styles.tournamentItem}>
+                      <Text style={styles.tournamentTitle}>{t.name}</Text>
+                      <Text style={styles.tournamentSub}>
+                        {[t.category, t.year, t.result, playingLevel]
+                          .filter((v) => v && v !== "—")
+                          .join(" · ")}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-              <View style={styles.tournamentList}>
-                {tournamentName ? (
-                  <View style={styles.tournamentItem}>
-                    <Text style={styles.tournamentTitle}>{tournamentName}</Text>
-                    <Text style={styles.tournamentSub}>
-                      {tournamentCategory} · {tournamentYear} · {tournamentResult} · {playingLevel}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.emptyText}>No tournament data yet.</Text>
-                )}
-              </View>
-            </View>
+            )}
 
             {/* Skills */}
             <View style={styles.recordSection}>
@@ -784,6 +811,35 @@ const styles = StyleSheet.create({
     fontSize: scale(36),
     fontWeight: "800",
     lineHeight: scale(44),
+  },
+  // ── Add Playing Style empty-state ────────────────────────────────────────
+  addPlayingStyleCard: {
+    borderWidth: 1.5,
+    borderColor: "#1A4A6B",
+    borderStyle: "dashed",
+    borderRadius: scale(14),
+    backgroundColor: "#0D2233",
+    height: scale(160),
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: scale(4),
+  },
+  addPlayingStylePlus: {
+    color: "white",
+    fontSize: scale(26),
+    fontWeight: "300",
+    lineHeight: scale(32),
+    marginBottom: scale(4),
+  },
+  addPlayingStyleTitle: {
+    color: "white",
+    fontSize: scale(14),
+    fontWeight: "700",
+  },
+  addPlayingStyleSubtitle: {
+    color: "#9CA3AF",
+    fontSize: scale(11),
+    marginTop: scale(2),
   },
   // ── Add About You empty-state ──────────────────────────────────────────────
   addAboutCard: {

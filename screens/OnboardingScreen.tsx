@@ -224,13 +224,13 @@ const OnboardingContent: React.FC = () => {
               <Text style={styles.cardTitle}>
                 {currentStep === 1 && "Let's Get Started!"}
                 {currentStep === 2 && "A Little More Info"}
-                {currentStep === 3 && "Show Your Game"}
+                {currentStep === 3 && "Let's Onboard You!"}
                 {currentStep >= 4 && "Let’s Onboard You!"}
               </Text>
               <Text style={styles.cardSubtitle}>
                 {currentStep === 1 && "Fill in your basic details to begin."}
                 {currentStep === 2 && "Help us know you better for matching."}
-                {currentStep === 3 && "Upload your highlights to the community."}
+                {currentStep === 3 && "Let's showcase your profile for better networking!"}
                 {currentStep === 4 && "Let’s get to know you and your skills better!"}
                 {currentStep === 5 && "Let’s get to know your training and matches played!"}
               </Text>
