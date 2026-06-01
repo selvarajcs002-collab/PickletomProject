@@ -3,10 +3,22 @@ import { View, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import {
   LayoutGrid,
-  Activity,
   SquarePlus,
   MessageSquare,
 } from "lucide-react-native";
+import Svg, { Path, Circle, Rect } from "react-native-svg";
+
+const PaddleIcon = ({ color, size }: { color: string, size: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {/* Paddle Face */}
+    <Rect x="10" y="2" width="10" height="13" rx="5" />
+    {/* Handle */}
+    <Path d="M15 15v6" />
+    <Path d="M13 21h4" />
+    {/* Ball */}
+    <Circle cx="5" cy="16" r="2.5" strokeDasharray="1 1" />
+  </Svg>
+);
 
 export default function BottomNav() {
   const router = useRouter();
@@ -21,25 +33,25 @@ export default function BottomNav() {
           onPress={() => router.push("/community-feed")}
           style={styles.navItem}
         >
-          <LayoutGrid size={24} color={isActive("/community-feed") || pathname === "/" ? "#F44725" : "#AAA"} />
+          <LayoutGrid size={24} color={isActive("/community-feed") || pathname === "/" ? "#F44725" : "#FFF"} />
         </TouchableOpacity>
 
         <TouchableOpacity 
           onPress={() => router.push("/basic-info")}
           style={styles.navItem}
         >
-          <Activity size={24} color={isActive("/basic-info") ? "#F44725" : "#AAA"} />
+          <PaddleIcon size={24} color={isActive("/basic-info") ? "#F44725" : "#FFF"} />
         </TouchableOpacity>
 
         <TouchableOpacity 
           onPress={() => router.push("/createpostscreen")}
           style={styles.navItem}
         >
-          <SquarePlus size={26} color={isActive("/createpostscreen") ? "#F44725" : "#AAA"} />
+          <SquarePlus size={26} color={isActive("/createpostscreen") ? "#F44725" : "#FFF"} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem}>
-          <MessageSquare size={24} color="#AAA" />
+          <MessageSquare size={24} color="#FFF" />
         </TouchableOpacity>
 
         <TouchableOpacity 

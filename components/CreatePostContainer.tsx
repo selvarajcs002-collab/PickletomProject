@@ -10,12 +10,15 @@ import {
     Dimensions
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Plus, Globe, ChevronRight, Camera, Image as ImageIcon } from 'lucide-react-native';
+import { Plus, Globe, ChevronRight, Camera, Image as ImageIcon, X } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PostTabHeader } from './PostTabHeader';
 import { postService } from '../services/postService';
+import { userSearchService, UserSearchResult } from '../services/userSearchService';
 import { showSuccess, showError } from '../utils/toast';
 import { scale, normalize } from '../utils/responsive';
+import { pickImage, pickVideo, requestMediaPermissions } from '../utils/mediaPicker';
+import { getAbsoluteUrl } from '../utils/imageUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +40,9 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
     const [question, setQuestion] = useState('');
     
     const [recipientProfile, setRecipientProfile] = useState('');
+    const [selectedRecipient, setSelectedRecipient] = useState<UserSearchResult | null>(null);
+    const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+    const [searching, setSearching] = useState(false);
     const [appreciationMessage, setAppreciationMessage] = useState('');
 
     useEffect(() => {
@@ -46,6 +52,21 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
         };
         getUserId();
     }, []);
+
+    // Mention Search Effect
+    useEffect(() => {
+        if (activeTab === 'Appreciation' && recipientProfile.length > 1 && !selectedRecipient) {
+            const delayDebounceFn = setTimeout(async () => {
+                setSearching(true);
+                const results = await userSearchService.searchUsers(recipientProfile);
+                setSearchResults(results);
+                setSearching(false);
+            }, 500);
+            return () => clearTimeout(delayDebounceFn);
+        } else {
+            setSearchResults([]);
+        }
+    }, [recipientProfile, activeTab, selectedRecipient]);
 
     const pickMedia = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -77,8 +98,8 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
                 return false;
             }
         } else if (activeTab === 'Appreciation') {
-            if (!recipientProfile.trim() || !appreciationMessage.trim()) {
-                showError("Please provide both recipient and message");
+            if (!selectedRecipient || !appreciationMessage.trim()) {
+                showError("Please select a profile and write a message");
                 return false;
             }
         }
@@ -91,18 +112,29 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
         setLoading(true);
         try {
             let response;
+
             if (activeTab === 'Create Post') {
-                response = await postService.createPost(userId!, caption, mediaUri!, visibility);
+                // Step 1: Upload media to Supabase and get public URL
+                showSuccess("Uploading media...");
+                const publicUrl = await postService.uploadPostMedia(mediaUri!, userId!);
+                if (!publicUrl) {
+                    console.error("[PostCreation] Upload failed - publicUrl is null");
+                    showError("Media upload failed (Server returned no URL). Please check your internet.");
+                    return;
+                }
+                console.log("[PostCreation] Upload success:", publicUrl);
+                // Step 2: Save post with the public URL
+                response = await postService.createPost(userId!, caption, publicUrl, visibility);
+
             } else if (activeTab === 'Q&A') {
                 response = await postService.createQuestion(userId!, question, visibility);
             } else {
-                response = await postService.createAppreciation(userId!, recipientProfile, appreciationMessage, visibility);
+                response = await postService.createAppreciation(userId!, selectedRecipient!.userId, appreciationMessage, visibility);
             }
 
             if (response.success) {
                 showSuccess(response.message);
                 resetForm();
-                // Optional: onClose(); 
             } else {
                 showError(response.message);
             }
@@ -118,6 +150,7 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
         setMediaUri(null);
         setQuestion('');
         setRecipientProfile('');
+        setSelectedRecipient(null);
         setAppreciationMessage('');
     };
 
@@ -212,20 +245,76 @@ export const CreatePostContainer: React.FC<CreatePostContainerProps> = ({ onClos
                 )}
 
                 {activeTab === 'Appreciation' && (
-                    <View>
-                        <TextInput
-                            placeholder="@profile"
-                            placeholderTextColor="#ccc"
-                            value={recipientProfile}
-                            onChangeText={setRecipientProfile}
-                            style={{
-                                fontSize: normalize(14),
-                                color: '#333',
-                                borderBottomWidth: 1,
-                                borderBottomColor: '#eee',
-                                paddingVertical: scale(10)
-                            }}
-                        />
+                    <View style={{ zIndex: 100 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+                            <TextInput
+                                placeholder="@profile"
+                                placeholderTextColor="#ccc"
+                                value={selectedRecipient ? selectedRecipient.fullName : recipientProfile}
+                                onChangeText={(txt) => {
+                                    setRecipientProfile(txt);
+                                    if (selectedRecipient) setSelectedRecipient(null);
+                                }}
+                                style={{
+                                    flex: 1,
+                                    fontSize: normalize(14),
+                                    color: selectedRecipient ? '#9b3224' : '#333',
+                                    fontWeight: selectedRecipient ? 'bold' : 'normal',
+                                    paddingVertical: scale(10)
+                                }}
+                            />
+                            {searching && <ActivityIndicator size="small" color="#9b3224" />}
+                            {selectedRecipient && (
+                                <TouchableOpacity onPress={() => setSelectedRecipient(null)}>
+                                    <X size={16} color="#9b3224" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Search Suggestions */}
+                        {!selectedRecipient && searchResults.length > 0 && (
+                            <View style={{ 
+                                backgroundColor: 'white', 
+                                borderRadius: 8, 
+                                marginTop: 5,
+                                maxHeight: 150,
+                                borderWidth: 1,
+                                borderColor: '#eee',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.1,
+                                elevation: 3,
+                                position: 'absolute',
+                                top: 40,
+                                left: 0,
+                                right: 0,
+                                zIndex: 1000
+                            }}>
+                                <ScrollView keyboardShouldPersistTaps="always">
+                                    {searchResults.map(user => (
+                                        <TouchableOpacity 
+                                            key={user.userId} 
+                                            onPress={() => {
+                                                setSelectedRecipient(user);
+                                                setSearchResults([]);
+                                            }}
+                                            style={{ 
+                                                padding: 10, 
+                                                borderBottomWidth: 1, 
+                                                borderBottomColor: '#f9f9f9',
+                                                flexDirection: 'row',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#eee', marginRight: 10, overflow: 'hidden' }}>
+                                                {user.avatar ? <Image source={{ uri: getAbsoluteUrl(user.avatar)! }} style={{ width: '100%', height: '100%' }} /> : <View style={{ backgroundColor: '#9b3224', width: '100%', height: '100%' }} />}
+                                            </View>
+                                            <Text style={{ fontSize: 13, color: '#333' }}>{user.fullName}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
                         <TextInput
                             placeholder="Write an appreciation..."
                             placeholderTextColor="#ccc"

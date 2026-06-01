@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
  * - Fallback for Android/iOS/Web
  */
 
-const DEV_MACHINE_IP = '192.168.1.10';
+const DEV_MACHINE_IP = '192.168.31.12';
 const PORT = '7296';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEV_MACHINE_IP}:${PORT}/api`;

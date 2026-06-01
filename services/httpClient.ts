@@ -85,6 +85,22 @@ const http = {
       );
     }
     return data;
+  },
+
+  async put(endpoint: string, body: any) {
+    const res = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await parseResponseBody(res);
+    if (!res.ok) {
+      throw new Error(getErrorMessage(data, "Update failed. Please try again."));
+    }
+    return data;
   }
 };
 

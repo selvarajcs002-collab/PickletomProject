@@ -11,15 +11,32 @@ interface FeedListProps {
     loading: boolean;
     refreshing: boolean;
     onRefresh: () => void;
+    currentUserId: number | null;
+    onDeletePost?: (postId: string, postType: string) => void;
+    onHidePost?: (postId: string, postType: string) => void;
 }
 
-export const FeedList: React.FC<FeedListProps> = ({ posts, loading, refreshing, onRefresh }) => {
-    
-    const renderItem = useCallback(({ item }: { item: PostDto }) => (
-        <PostCard post={item} />
-    ), []);
+export const FeedList: React.FC<FeedListProps> = ({
+    posts,
+    loading,
+    refreshing,
+    onRefresh,
+    currentUserId,
+    onDeletePost,
+    onHidePost,
+}) => {
 
-    const keyExtractor = useCallback((item: PostDto) => item.postId, []);
+    const renderItem = useCallback(({ item }: { item: PostDto }) => (
+        <PostCard
+            post={item}
+            currentUserId={currentUserId}
+            onDelete={onDeletePost}
+            onHide={onHidePost}
+            onPin={onRefresh}
+        />
+    ), [currentUserId, onDeletePost, onHidePost, onRefresh]);
+
+    const keyExtractor = useCallback((item: PostDto, index: number) => `${item.postType ?? 'post'}_${item.postId ?? index}`, []);
 
     if (loading && !refreshing) {
         return (
@@ -40,16 +57,18 @@ export const FeedList: React.FC<FeedListProps> = ({ posts, loading, refreshing, 
             windowSize={5}
             removeClippedSubviews={true}
             refreshControl={
-                <RefreshControl 
-                    refreshing={refreshing} 
-                    onRefresh={onRefresh} 
-                    tintColor={Colors.primary} 
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={Colors.primary}
                     colors={[Colors.primary]}
                 />
             }
             ListEmptyComponent={() => (
                 <View style={{ padding: Spacing.xxl, alignItems: 'center' }}>
-                    <Text style={{ color: Colors.textMuted, fontSize: normalize(14) }}>No posts found</Text>
+                    <Text style={{ color: Colors.textMuted, fontSize: normalize(14) }}>
+                        No posts yet. Be the first to post!
+                    </Text>
                 </View>
             )}
         />

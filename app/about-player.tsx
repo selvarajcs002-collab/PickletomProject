@@ -10,6 +10,7 @@ import {
   StatusBar,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import {
   Pencil,
@@ -23,12 +24,16 @@ import {
   Award,
   GraduationCap,
   BarChart3,
+  LogOut,
 } from "lucide-react-native";
 import * as Colors from "../constants/Colors";
 import BottomNav from "../components/BottomNav";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { profileService } from "../services/profileService";
 import { useRouter, useFocusEffect } from "expo-router";
+import { userSearchService } from "../services/userSearchService";
+import { UserListModal } from "../components/UserListModal";
+import { getAbsoluteUrl } from "../utils/imageUtils";
 
 const { width } = Dimensions.get("window");
 const scale = (size: number) => (width / 375) * size;
@@ -51,6 +56,10 @@ function ProfileInfo() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<number>(0);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<'Followers' | 'Following' | 'Connections'>('Followers');
 
   // Re-fetch every time this screen gains focus (e.g. returning from edit-profile)
   useFocusEffect(
@@ -66,7 +75,17 @@ function ProfileInfo() {
             return;
           }
           const userId = parseInt(storedId, 10);
-          const data = await profileService.getProfile(userId);
+          setMyUserId(userId);
+          const [data, publicData] = await Promise.all([
+            profileService.getProfile(userId),
+            userSearchService.getPublicProfile(userId, userId)
+          ]);
+          
+          if (data) {
+              data.FollowerCount = publicData?.followerCount || 0;
+              data.ConnectionCount = publicData?.connectionCount || 0;
+          }
+
           if (active) setProfile(data);
         } catch (err: any) {
           console.error("Profile fetch error:", err);
@@ -138,27 +157,36 @@ function ProfileInfo() {
     }];
   }
 
-  // ── Coach fields (future-proof: will auto-populate when API returns them) ──
-  const coachingSince = profile.CoachingSince || profile.Coaching_since || null;
-  const coachingOpenTo = profile.OpenTo || profile.Open_to || null;
-  const coachingTrainingLevel = profile.CoachingTrainingLevel || profile.Coaching_training_level || null;
-  const coachingLocation = profile.CoachingLocation || profile.Coaching_location || trainingLocation !== "—" ? trainingLocation : null;
-  const coachingSpecialisation = parseSkills(profile.CoachingSpecialisation || profile.Coaching_specialisation || profile.Skills || "");
-  const certification = profile.Certification || null;
+  // ── Coach fields (UI Mock since API does not return these yet) ──
+  const coachingSince = profile.CoachingSince || profile.Coaching_since || "2025";
+  const coachingOpenTo = profile.OpenTo || profile.Open_to || "Individual & Group";
+  const coachingTrainingLevel = profile.CoachingTrainingLevel || profile.Coaching_training_level || "Beginner, Intermediate, Advance, Professional";
+  const coachingLocation = profile.CoachingLocation || profile.Coaching_location || trainingLocation !== "—" ? trainingLocation : "RallyHub, Tirupur, TN, India";
+  
+  // Use real data if available, else fallback to Figma mock
+  const rawSpecialisation = profile.CoachingSpecialisation || profile.Coaching_specialisation;
+  const coachingSpecialisation = rawSpecialisation ? parseSkills(rawSpecialisation) : ["Fast Volleys", "Third Shot Drop", "Overhead Smash", "Speed Drills", "Backhand Slice"];
+  
+  const certification = profile.Certification || "PPA";
 
-  // A coach record is considered present if at least one coach-specific field exists
-  const hasCoachRecord = !!(coachingSince || coachingOpenTo || coachingTrainingLevel || coachingLocation || certification || coachingSpecialisation.length > 0);
+  // Force true for now so the UI mock is visible (matching Figma)
+  const hasCoachRecord = true;
 
-  const profileImageUrl = profile.ProfileImageUrl || null;
+  const profileImageUrl = getAbsoluteUrl(profile.ProfileImageUrl || null);
+  const coverImageUrl = getAbsoluteUrl(profile.BackgroundImageUrl || profile.CoverImageUrl || null);
   const initial = fullName && fullName !== "—" ? fullName.trim()[0].toUpperCase() : "?";
-  const coverImageUrl = profile.BackgroundImageUrl || profile.CoverImageUrl || null;
 
   const playingSinceDisplay =
     playingSince !== "—"
       ? `${playingSince}${playingSinceYear ? " " + playingSinceYear : ""}`
       : "—";
 
-  const subText = `${playingLevel} · ${gender} · ${yearBorn}`;
+  const genderShort = gender === "Male" ? "M" : gender === "Female" ? "F" : gender;
+  let ageDisplay = yearBorn;
+  if (yearBorn !== "—" && !isNaN(parseInt(yearBorn, 10)) && parseInt(yearBorn, 10) > 1900) {
+      ageDisplay = (new Date().getFullYear() - parseInt(yearBorn, 10)).toString();
+  }
+  const subText = `${playingLevel} · ${genderShort} · ${ageDisplay}`;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: Colors.background || "transparent" }]}>
@@ -167,9 +195,26 @@ function ProfileInfo() {
       {/* TOP HEADER */}
       <View style={styles.topHeader}>
         <Text style={styles.headerTitle}>PickleOn</Text>
-        <TouchableOpacity onPress={() => router.push("/edit-profile")}>
-          <Pencil color="white" size={20} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: scale(16) }}>
+          <TouchableOpacity onPress={() => router.push("/edit-profile")}>
+            <Pencil color="white" size={20} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            Alert.alert("Logout", "Are you sure you want to logout?", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Logout",
+                style: "destructive",
+                onPress: async () => {
+                  await AsyncStorage.removeItem("userId");
+                  router.replace("/");
+                },
+              },
+            ]);
+          }}>
+            <LogOut color="#FF4A2A" size={20} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -193,9 +238,6 @@ function ProfileInfo() {
                     <Text style={styles.initialsText}>{initial}</Text>
                   </View>
                 )}
-                <TouchableOpacity style={styles.editProfileTool}>
-                  <Pencil color="white" size={10} />
-                </TouchableOpacity>
               </View>
 
               <View style={styles.nameSection}>
@@ -205,7 +247,7 @@ function ProfileInfo() {
                 </View>
                 <Text style={styles.subText}>{subText}</Text>
                 <View style={styles.locationRow}>
-                  <Text style={{ fontSize: 14 }}>📍 </Text>
+                  <Text style={{ fontSize: 14 }}>🇺🇸 </Text>
                   <Text style={styles.locationText}>{location}</Text>
                 </View>
               </View>
@@ -246,21 +288,29 @@ function ProfileInfo() {
 
             {/* SOCIAL PILLS */}
             <View style={styles.pillsRow}>
-              <View style={styles.socialPill}>
+              <TouchableOpacity 
+                style={styles.socialPill} 
+                onPress={() => { setModalType('Connections'); setModalVisible(true); }}
+              >
                 <UserPlus color="#555" size={14} />
-                <Text style={styles.pillText}>500+ Networks</Text>
-              </View>
-              <View style={styles.socialPill}>
+                <Text style={styles.pillText}>{profile.ConnectionCount || 0} Networks</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.socialPill}
+                onPress={() => { setModalType('Followers'); setModalVisible(true); }}
+              >
                 <Users color="#555" size={14} />
-                <Text style={styles.pillText}>500+ Followers</Text>
-              </View>
+                <Text style={styles.pillText}>{profile.FollowerCount || 0} Followers</Text>
+              </TouchableOpacity>
             </View>
 
             {/* PLAYER RATING */}
-            <View style={styles.ratingSection}>
-              <Text style={styles.ratingHeading}>PLAYER RATING</Text>
-              <Text style={styles.duprLogo}>DUPR®</Text>
-            </View>
+            {duprLink && duprLink !== "—" && (
+              <View style={styles.ratingSection}>
+                <Text style={styles.ratingHeading}>PLAYER RATING</Text>
+                <Text style={styles.duprLogo}>DUPR®</Text>
+              </View>
+            )}
 
             {/* CARD FOOTER */}
             {clubName !== "—" && (
@@ -494,6 +544,14 @@ function ProfileInfo() {
 
       </ScrollView>
 
+      <UserListModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        userId={myUserId}
+        currentUserId={myUserId}
+        listType={modalType}
+      />
+
       {/* NAVIGATION BAR */}
       <BottomNav />
     </SafeAreaView>
@@ -651,14 +709,15 @@ const styles = StyleSheet.create({
   ratingHeading: {
     fontSize: scale(12),
     fontWeight: "bold",
-    color: "#888",
-    letterSpacing: 1,
+    color: "#555",
+    letterSpacing: 2,
   },
   duprLogo: {
     fontSize: scale(42),
     fontWeight: "900",
-    color: "#0048AB",
+    color: "#051024",
     marginTop: scale(5),
+    letterSpacing: -1,
   },
   cardFooter: {
     flexDirection: "row",
